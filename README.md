@@ -1,7 +1,17 @@
 # crux
 
-Your prompt goes to crux first. It figures out what you left undecided, and gets
-those answers from three different places, only one of which is you.
+[![CI](https://github.com/Vedanshu7/crux/actions/workflows/ci.yml/badge.svg)](https://github.com/Vedanshu7/crux/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
+[![Checked with mypy](https://img.shields.io/badge/mypy-strict-2a6db2.svg)](https://mypy-lang.org/)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+
+**An embeddable clarification agent.** It sits in front of the agent that does the
+work, figures out what your prompt left undecided, answers most of it from your
+codebase, and asks you only about the few things that are costly to get wrong.
+
+What comes out is a prompt where every line says who decided it: you, the code, a
+default, or your agent.
 
 ```python
 import crux
@@ -210,7 +220,9 @@ to prevent.
 
 ## Documentation
 
+- [`CONTRIBUTING.md`](CONTRIBUTING.md), the gate, the three test tiers, and what is most wanted.
 - [`CLAUDE.md`](CLAUDE.md), the import alias table, the invariants, the vocabulary.
+- [`SECURITY.md`](SECURITY.md), what is in scope and how to report it privately.
 - [`docs/code_guidelines/coding-style.md`](docs/code_guidelines/coding-style.md)
 - [`docs/code_guidelines/type-hints.md`](docs/code_guidelines/type-hints.md)
 - [`docs/code_guidelines/unit-tests.md`](docs/code_guidelines/unit-tests.md)
