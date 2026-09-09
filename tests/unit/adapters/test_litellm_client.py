@@ -312,6 +312,21 @@ class TestVerdictLadder:
         exc = litellm.exceptions.BadRequestError("bad schema", model="m", llm_provider="p")
         assert xlitell._verdict(exc) == "fatal"
 
+    def test_groqs_tool_refusal_400_is_retried_not_fatal(self) -> None:
+        """
+        Test the provider quirk that failed two of the first three corpus
+        cases on gpt-oss-20b: Groq turns "model did not call the forced tool"
+        into a 400. That is the model failing, which is retryable, not our
+        schema failing, which is not, and the message is the only way to
+        tell them apart.
+        """
+        exc = litellm.exceptions.BadRequestError(
+            '{"error":{"message":"Tool choice is required, but model did not call a tool"}}',
+            model="groq/openai/gpt-oss-20b",
+            llm_provider="groq",
+        )
+        assert xlitell._verdict(exc) == "retry"
+
     def test_an_unknown_error_is_fatal(self) -> None:
         """
         Test that anything unrecognised keeps today's behaviour rather than

@@ -70,6 +70,12 @@ def _verdict(exc: Exception) -> Verdict:
       Checking the status code catches them without naming them.
     - ``BudgetExceededError`` descends from bare ``Exception`` and is caught by
       no ``APIError`` clause at all.
+    - Groq reports a model that ignored a forced tool as a 400, "Tool choice
+      is required, but model did not call a tool", where every other provider
+      returns the prose. It is the model failing, not the request, and a fresh
+      sample usually calls the tool, so it is retried like a rate limit rather
+      than treated as our own malformed schema. Seen on gpt-oss-20b on two of
+      the first three corpus cases.
 
     :param exc: What the provider raised.
     :return: Whether to wait and retry, move to the next model, or stop.
@@ -83,6 +89,8 @@ def _verdict(exc: Exception) -> Verdict:
         return "retry"
     status = getattr(exc, "status_code", None)
     if isinstance(status, int) and status >= 500:
+        return "retry"
+    if isinstance(exc, E.BadRequestError) and "did not call a tool" in str(exc):
         return "retry"
     if isinstance(
         exc,
