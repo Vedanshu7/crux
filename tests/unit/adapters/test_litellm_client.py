@@ -312,6 +312,27 @@ class TestVerdictLadder:
         exc = litellm.exceptions.BadRequestError("bad schema", model="m", llm_provider="p")
         assert xlitell._verdict(exc) == "fatal"
 
+    @pytest.mark.parametrize(
+        "message",
+        [
+            '{"error":{"message":"Tool choice is required, but model did not call a tool"}}',
+            '{"error":{"message":"Failed to parse tool call arguments as JSON",'
+            '"code":"tool_use_failed"}}',
+        ],
+    )
+    def test_groqs_model_tool_failures_are_retried_not_fatal(self, message: str) -> None:
+        """
+        Test the provider quirk that failed the first corpus case on
+        gpt-oss-20b twice over: Groq turns the model ignoring the forced tool,
+        and the model emitting bad JSON for it, into 400s. Both are the model
+        failing, which is retryable, not our schema failing, which is not, and
+        the message is the only way to tell them apart.
+        """
+        exc = litellm.exceptions.BadRequestError(
+            message, model="groq/openai/gpt-oss-20b", llm_provider="groq"
+        )
+        assert xlitell._verdict(exc) == "retry"
+
     def test_an_unknown_error_is_fatal(self) -> None:
         """
         Test that anything unrecognised keeps today's behaviour rather than
