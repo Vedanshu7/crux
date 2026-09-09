@@ -312,18 +312,24 @@ class TestVerdictLadder:
         exc = litellm.exceptions.BadRequestError("bad schema", model="m", llm_provider="p")
         assert xlitell._verdict(exc) == "fatal"
 
-    def test_groqs_tool_refusal_400_is_retried_not_fatal(self) -> None:
+    @pytest.mark.parametrize(
+        "message",
+        [
+            '{"error":{"message":"Tool choice is required, but model did not call a tool"}}',
+            '{"error":{"message":"Failed to parse tool call arguments as JSON",'
+            '"code":"tool_use_failed"}}',
+        ],
+    )
+    def test_groqs_model_tool_failures_are_retried_not_fatal(self, message: str) -> None:
         """
-        Test the provider quirk that failed two of the first three corpus
-        cases on gpt-oss-20b: Groq turns "model did not call the forced tool"
-        into a 400. That is the model failing, which is retryable, not our
-        schema failing, which is not, and the message is the only way to
-        tell them apart.
+        Test the provider quirk that failed the first corpus case on
+        gpt-oss-20b twice over: Groq turns the model ignoring the forced tool,
+        and the model emitting bad JSON for it, into 400s. Both are the model
+        failing, which is retryable, not our schema failing, which is not, and
+        the message is the only way to tell them apart.
         """
         exc = litellm.exceptions.BadRequestError(
-            '{"error":{"message":"Tool choice is required, but model did not call a tool"}}',
-            model="groq/openai/gpt-oss-20b",
-            llm_provider="groq",
+            message, model="groq/openai/gpt-oss-20b", llm_provider="groq"
         )
         assert xlitell._verdict(exc) == "retry"
 

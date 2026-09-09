@@ -70,12 +70,13 @@ def _verdict(exc: Exception) -> Verdict:
       Checking the status code catches them without naming them.
     - ``BudgetExceededError`` descends from bare ``Exception`` and is caught by
       no ``APIError`` clause at all.
-    - Groq reports a model that ignored a forced tool as a 400, "Tool choice
-      is required, but model did not call a tool", where every other provider
-      returns the prose. It is the model failing, not the request, and a fresh
-      sample usually calls the tool, so it is retried like a rate limit rather
-      than treated as our own malformed schema. Seen on gpt-oss-20b on two of
-      the first three corpus cases.
+    - Groq reports a model's own tool failures as 400s: "Tool choice is
+      required, but model did not call a tool", and ``tool_use_failed`` when
+      the model's arguments were not valid JSON. Every other provider returns
+      the prose or the broken call and lets us judge it. It is the model
+      failing, not the request, and a fresh sample usually gets it right, so
+      these are retried like a rate limit rather than treated as our own
+      malformed schema. Both seen on gpt-oss-20b within the first corpus case.
 
     :param exc: What the provider raised.
     :return: Whether to wait and retry, move to the next model, or stop.
@@ -90,7 +91,7 @@ def _verdict(exc: Exception) -> Verdict:
     status = getattr(exc, "status_code", None)
     if isinstance(status, int) and status >= 500:
         return "retry"
-    if isinstance(exc, E.BadRequestError) and "did not call a tool" in str(exc):
+    if isinstance(exc, E.BadRequestError) and _is_model_tool_failure(exc):
         return "retry"
     if isinstance(
         exc,
@@ -112,6 +113,16 @@ def _verdict(exc: Exception) -> Verdict:
     ):
         return "fallback"
     return "fatal"
+
+
+def _is_model_tool_failure(exc: Exception) -> bool:
+    """
+    :param exc: A bad-request error.
+    :return: Whether the provider is reporting the model's tool call failing,
+        as opposed to our request being malformed.
+    """
+    text = str(exc)
+    return "did not call a tool" in text or "tool_use_failed" in text
 
 
 class _Unavailable(Exception):
