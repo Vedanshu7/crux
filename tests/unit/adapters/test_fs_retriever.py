@@ -273,6 +273,18 @@ class TestRunTrace:
             forced_tool="propose_decisions",
             response={"tool_calls": [{"name": "propose_decisions", "arguments": {}}]},
             elapsed_seconds=1.5,
+            prompt_tokens=100,
+            completion_tokens=25,
+            cost_usd=0.0123,
+        )
+        recorder.record_call(
+            operation="chat",
+            model="test/model",
+            messages=[{"role": "user", "content": "follow up"}],
+            forced_tool=None,
+            elapsed_seconds=0.5,
+            prompt_tokens=40,
+            completion_tokens=10,
         )
 
         where = recorder.write(session)
@@ -280,6 +292,18 @@ class TestRunTrace:
         narrative = (where / "run.md").read_text()
         assert "add rate limiting" in narrative
         assert "| 1 | blind | 7 | 7 | 1.00 |" in narrative
+        assert (
+            "| # | operation | model | prompt tokens | completion tokens | "
+            "cost (USD) | elapsed | outcome |"
+        ) in narrative
+        assert (
+            "| 1 | propose_decisions | `test/model` | 100 | 25 | "
+            "0.0123 | 1.5s | ok |"
+        ) in narrative
+        assert "| 2 | chat | `test/model` | 40 | 10 |  | 0.5s | ok |" in narrative
+        assert "**Prompt tokens**: 140" in narrative
+        assert "**Completion tokens**: 35" in narrative
+        assert "**Cost (USD)**: 0.0123" in narrative
         assert "software.scope.build" in narrative
         assert "respondent" in narrative
         assert (where / "session.json").is_file()
@@ -305,6 +329,18 @@ class TestRunTrace:
 
         where = recorder.write(session, None, error="model stayed rate limited")
 
-        assert "## Failed" in (where / "run.md").read_text()
+        narrative = (where / "run.md").read_text()
+        assert "## Failed" in narrative
+        assert (
+            "| # | operation | model | prompt tokens | completion tokens | "
+            "cost (USD) | elapsed | outcome |"
+        ) in narrative
+        assert "- **Prompt tokens**: 0" in narrative
+        assert "- **Completion tokens**: 0" in narrative
+        assert "- **Cost (USD)**: " in narrative
+        assert (
+            "| 1 | propose_decisions | `test/model` | None | None |  | "
+            "0.0s | error: rate limited |"
+        ) in narrative
         assert (where / "calls" / "01-propose_decisions-failed.json").is_file()
         assert not (where / "compiled.md").exists()

@@ -45,6 +45,9 @@ class CallRecord(pydantic.BaseModel):
     error: str = ""
     attempt: int = 0
     """Position in the fallback chain. Non-zero means an earlier model failed."""
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    cost_usd: float | None = None
 
 
 class RunRecorder:
@@ -72,6 +75,9 @@ class RunRecorder:
         elapsed_seconds: float = 0.0,
         error: str = "",
         attempt: int = 0,
+        prompt_tokens: int | None = None,
+        completion_tokens: int | None = None,
+        cost_usd: float | None = None,
     ) -> None:
         """
         Keep one model exchange.
@@ -96,6 +102,9 @@ class RunRecorder:
                 elapsed_seconds=elapsed_seconds,
                 error=error,
                 attempt=attempt,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                cost_usd=cost_usd,
             )
         )
 
@@ -159,6 +168,10 @@ class RunRecorder:
         """
         if session is None:
             return self._narrate_callsonly(error)
+        total_prompt_tokens = sum(call.prompt_tokens or 0 for call in self._calls)
+        total_completion_tokens = sum(call.completion_tokens or 0 for call in self._calls)
+        known_costs = [call.cost_usd for call in self._calls if call.cost_usd is not None]
+        total_cost = f"{sum(known_costs):.4f}" if known_costs else ""
         lines = [
             f"# Run {session.id}",
             "",
@@ -167,6 +180,9 @@ class RunRecorder:
             f"- **Packs**: {', '.join(session.context.pack_ids)}",
             f"- **Ended in phase**: `{session.phase}`",
             f"- **Model calls**: {self.call_count}",
+            f"- **Prompt tokens**: {total_prompt_tokens}",
+            f"- **Completion tokens**: {total_completion_tokens}",
+            f"- **Cost (USD)**: {total_cost}",
             f"- **Questions asked**: {session.budget.spent_questions}",
             f"- **Rounds**: {session.budget.spent_rounds}",
         ]
@@ -242,14 +258,19 @@ class RunRecorder:
                 lines.append("")
 
         lines += ["", "## Model calls", ""]
-        lines.append("| # | operation | model | elapsed | outcome |")
-        lines.append("|---|---|---|---|---|")
+        lines.append(
+            "| # | operation | model | prompt tokens | completion tokens | "
+            "cost (USD) | elapsed | outcome |"
+        )
+        lines.append("|---|---|---|---|---|---|---|---|")
         for call in self._calls:
             outcome = f"error: {call.error[:50]}" if call.error else "ok"
             if call.attempt:
                 outcome = f"fallback #{call.attempt}, {outcome}"
+            cost = "" if call.cost_usd is None else f"{call.cost_usd:.4f}"
             lines.append(
                 f"| {call.index} | {call.operation} | `{call.model}` | "
+                f"{call.prompt_tokens} | {call.completion_tokens} | {cost} | "
                 f"{call.elapsed_seconds:.1f}s | {outcome} |"
             )
         lines.append("")
@@ -276,6 +297,10 @@ class RunRecorder:
         :param error: What killed it.
         :return: Markdown.
         """
+        total_prompt_tokens = sum(call.prompt_tokens or 0 for call in self._calls)
+        total_completion_tokens = sum(call.completion_tokens or 0 for call in self._calls)
+        known_costs = [call.cost_usd for call in self._calls if call.cost_usd is not None]
+        total_cost = f"{sum(known_costs):.4f}" if known_costs else ""
         lines = [
             "# Run failed before any round completed",
             "",
@@ -284,13 +309,20 @@ class RunRecorder:
             "",
             f"```\n{error}\n```",
             "",
-            "| # | operation | elapsed | outcome |",
-            "|---|---|---|---|",
+            f"- **Prompt tokens**: {total_prompt_tokens}",
+            f"- **Completion tokens**: {total_completion_tokens}",
+            f"- **Cost (USD)**: {total_cost}",
+            "",
+            "| # | operation | model | prompt tokens | completion tokens | "
+            "cost (USD) | elapsed | outcome |",
+            "|---|---|---|---|---|---|---|---|",
         ]
         for call in self._calls:
             outcome = f"error: {call.error[:60]}" if call.error else "ok"
+            cost = "" if call.cost_usd is None else f"{call.cost_usd:.4f}"
             lines.append(
                 f"| {call.index} | {call.operation} | `{call.model}` | "
+                f"{call.prompt_tokens} | {call.completion_tokens} | {cost} | "
                 f"{call.elapsed_seconds:.1f}s | {outcome} |"
             )
         return "\n".join(lines) + "\n"
