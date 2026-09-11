@@ -21,6 +21,7 @@ import crux.adapters.llm.litellm as xlitell
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import random
@@ -274,11 +275,12 @@ class LiteLlmClient:
                     started,
                     f"did not call {force_tool!r}",
                     position,
+                    response,
                 )
                 raise _Unavailable(
                     spec.name, f"answered without calling {force_tool!r}", "fallback"
                 )
-            self._record(spec, kwargs, force_tool, turn, started, "", position)
+            self._record(spec, kwargs, force_tool, turn, started, "", position, response)
             return turn
         raise _Unavailable(spec.name, "retry loop exhausted", "fallback")
 
@@ -311,6 +313,7 @@ class LiteLlmClient:
         started: float,
         error: str,
         position: int,
+        response: Any | None = None,
     ) -> None:
         """
         Hand one attempt to the recorder, if there is one.
@@ -330,6 +333,14 @@ class LiteLlmClient:
         """
         if self._recorder is None:
             return
+        usage = getattr(response, "usage", None)
+        prompt_tokens = getattr(usage, "prompt_tokens", None) if usage else None
+        completion_tokens = getattr(usage, "completion_tokens", None) if usage else None
+
+        cost_usd = None
+        if response is not None:
+            with contextlib.suppress(Exception):
+                cost_usd = litellm.completion_cost(completion_response=response)
         self._recorder.record_call(
             operation=force_tool or "chat",
             model=spec.name,
@@ -339,6 +350,9 @@ class LiteLlmClient:
             elapsed_seconds=time.monotonic() - started,
             error=error,
             attempt=position,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            cost_usd=cost_usd,
         )
 
 
